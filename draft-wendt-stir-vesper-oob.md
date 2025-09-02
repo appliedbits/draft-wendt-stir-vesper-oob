@@ -189,7 +189,7 @@ Path: /passports/{DEST}/{ORIG}
 Headers:
 
 - Content-Type: application/json
-- Authorization: Bearer /<JWT/>
+- Authorization: Bearer \<JWT\>
 - Body (example for a standard publish request):
 
 ~~~ json
