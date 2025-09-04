@@ -139,12 +139,12 @@ General Operations:
 These required endpoints enable basic VESPER-OOB publish and retrieval functions:
 
 - GET /health — check service availability
-- POST /passports/{DEST}/{ORIG} — publish one or more signed PASSporTs, optionally with a 'response_url' for Connected Identity
-- GET /passports/{DEST}/{ORIG} — retrieve published PASSporTs and optionally discover an associated 'response_url'
+- POST /passports/{DEST}/{ORIG} — publish one or more signed PASSporTs, optionally with a 'response_uuid' for Connected Identity
+- GET /passports/{DEST}/{ORIG} — retrieve published PASSporTs and optionally discover an associated 'response_uuid'
 
 Connected Identity Extensions:
 
-These optional endpoints are used if a `response_url` was included in the publish operation and the recipient supports Connected Identity:
+These optional endpoints are used if a `response_uuid` was included in the publish operation and the recipient supports Connected Identity:
 
 - POST /respond/{UUID} — the called party submits a 'rsp' PASSporT
 - GET /passports/response/{UUID} — the caller polls for the response
@@ -159,7 +159,7 @@ Server certificates SHOULD be validated using standard PKIX procedures. HTTP Str
 
 All CPS interfaces that require authorization MUST support Access JWTs signed using the `ES256` algorithm and validated against trusted VESPER delegate certificates. These tokens establish caller or responder identity and intent.
 
-### JWT Header
+### Access JWT Header
 
 ~~~ json
 {
@@ -172,11 +172,11 @@ All CPS interfaces that require authorization MUST support Access JWTs signed us
 ~~~
 
 - 'alg': MUST be "ES256" as required by STIR PASSporT and VESPER.
-- 'x5c': An array of base64-encoded certificates representing the end-entity delegate certificate and optional intermediates. The first certificate MUST be the signing certificate. These MUST be validated against a trusted root.
+- 'x5c': An array of base64-encoded certificates representing the end-entity delegate certificate and any intermediate certificates with an optionally included root certificate. These MUST be validated against a STIR eco-system trusted root.
 
-### JWT Claims
+### Access JWT Claims
 
-The JWT payload MUST contain the following claims:
+The Access JWT payload MUST contain the following claims:
 
 | Claim         | Description                                                      |
 |---------------|------------------------------------------------------------------|
@@ -258,306 +258,328 @@ The CPS MUST validate the Access JWT as follows:
 - JWT replay prevention SHOULD be enforced using the `jti` field and short TTLs.
 - Tokens MUST be scoped per transaction; long-lived JWTs MUST NOT be used.
 
-## GET /health
+## API Method Definitions
 
-The HTTP GET health check endpoint allows relying parties to determine the operational readiness of the CPS service.
+### Method: 'GET /health'
 
-Request:
+#### Request Definition
 
-Method: GET
-URI: /health
-
-Response:
-
-- If the CPS is fully operational meaning, able to process both publish and retrieve requests for PASSporTs, it MUST return an HTTP status code 200 OK.
-- If the CPS is unable to process either publish or retrieve requests, it MUST return an HTTP error status code greater than 399, in accordance with {{RFC6585}} (e.g., 503 Service Unavailable).
-- The response MAY include a diagnostic payload or status indicator, but no body is required.
-
-This endpoint is intended for availability monitoring and MUST be accessible without authentication.
-
-Example Request:
-
-~~~
-GET /health HTTP/1.1
-Content-Length: 0
-Host: cps.example.com
+~~~ http
+Method: GET  
+Path: /health  
+Authentication: None required
 ~~~
 
-Example Response: 
+#### Response Definition
 
+200 OK — Service operational  
+503 Service Unavailable — Service not operational  
+Body (optional):
+
+~~~ json
+{
+  "status": 200,
+  "message": "OK"
+}
 ~~~
-HTTP/1.1 200 OK
-Content-Type: application/json
-Content-Length: 29
 
-{"status":200,"message":"OK"}
-~~~
+### Publish Method: POST /passports/{DEST}/{ORIG}
 
-## POST /passports/{DEST}/{ORIG}
+This method allows the calling party to publish one or more signed PASSporTs associated with a specific ORIG and DEST pair. The CPS MAY optionally return a `response_uuid` for Connected Identity.
 
-The HTTPS interface for publishing PASSporT(s) requires a POST request to the path /passports/{DEST}/{ORIG}. The path parameters MUST be substituted as follows:
+PASSporTs and Connected Identity response PASSporTs SHOULD be retained only for a short period of time unless longer retention is explicitly required by policy.
 
-DEST: The percent-encoded and canonicalized destination telephone number (TN) or URI, representing the called party after any retargeting. If a valid telephone number is not available, the called URI (e.g., "urn:service:sos") MAY be used instead, encoded per {{RFC3986}}.
+Note: {{ATIS-1000096}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification are not dependent on support the initiation of this action or otherwise communicate to other CPSs supporting this specification including the inclusion of "token" fields, but the intent is to be compatible with implementations that support both specifications
 
-ORIG: The percent-encoded and canonicalized calling party TN or URI, typically obtained from the SIP From or P-Asserted-Identity header. Canonicalization of telephone numbers follows the procedures in {{RFC8224}}.
+#### Request definition
 
-### Request definition:
-
+~~~ http
 Method: POST
 Path: /passports/{DEST}/{ORIG}
-Headers:
+Authentication: Access JWT with "action": "publish"
+~~~
 
-- Content-Type: application/json
-- Authorization: Bearer \<JWT\>
-- Body (example for a standard publish request):
+#### Request Headers
+
+~~~ http
+Content-Type: application/json
+Authorization: Bearer <Access JWT>
+~~~
+
+#### Request Parameters
+
+DEST: Canonicalized and percent-encoded destination telephone number or URI. <br/>
+ORIG: Canonicalized and percent-encoded originating telephone number or URI.
+
+Canonicalization of TNs follows {{RFC8224}} and percent encoding of URIs follows {{RFC3986}}.
+
+#### Request Body
+
+The request body is a JSON object with the following field:
+
+- passports: REQUIRED. An array of PASSporT strings signed by the calling party.
+
+Authorization JWT Requirements:
+
+The Access JWT for this method MUST include:
+
+- "action": "publish"
+
+All other validation requirements are defined in Common Access JWT.
+
+#### Example Request
+
+~~~ http
+POST /passports/19032469103/12013776051 HTTP/1.1
+Host: cps.example.com
+Authorization: Bearer <Access JWT>
+Content-Type: application/json
+
+{
+  "passports": [
+    "eyJhbGciOiJFUzI1NiIsIn..."
+  ]
+}
+~~~
+
+#### Response definition
+
+Success Codes
+
+~~~ http
+201 - Created if the PASSporTs were successfully published.
+~~~
+
+Failure Codes
+
+~~~ http
+400 - Bad Request if required fields are missing or malformed
+401 - Unauthorized if authentication fails
+403 - Forbidden if certificate constraints are not met
+429 - Too Many Requests if rate-limited
+5xx errors (e.g., 503 Service Unavailable) - if the server cannot process the request
+~~~
+
+Responses MUST use status codes defined in {{RFC6585}} and SHOULD be informative when possible.
+
+If the server supports Connected Identity, the response body MAY include a `response_uuid` that the called party can use in follow-up Connected Identity methods. This UUID is generated by the CPS and serves as a transaction-specific identifier for subsequent API calls.
+
+#### Example Response
+
+~~~ http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "status": 201,
+  "message": "Created",
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
+~~~
+
+#### Response Body Fields
+
+- `status`: HTTP status code indicating result of publish request (e.g., 201 for success).
+- `message`: A human-readable message describing the outcome of the request.
+- `response_uuid`: (Optional) A UUID generated by the CPS for Connected Identity. Returned only if the CPS supports Connected Identity response workflows.
+
+#### Example Success and Error Responses
+
+Success Response (201 Created):
+
+~~~ http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "status": 201,
+  "message": "Created",
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
+~~~
+
+Error Response (400 Bad Request):
+
+~~~ http
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{
+  "status": 400,
+  "error": "Missing required field: passports"
+}
+~~~
+
+Error Response (401 Unauthorized):
+
+~~~ http
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+
+{
+  "status": 401,
+  "error": "Access JWT is invalid or expired"
+}
+~~~
+
+### Retrieve Method: GET /passports/{DEST}/{ORIG}
+
+This method allows the called party to retrieve PASSporTs published by the originating party for a given ORIG/DEST combination.
+
+#### Request Definition
+
+~~~ http
+Method: GET
+Path: /passports/{DEST}/{ORIG}
+Authentication: Access JWT with "action": "retrieve"
+~~~
+
+#### Request Headers
+
+~~~ http
+Authorization: Bearer <Access JWT>
+~~~
+
+#### Request Parameters
+
+- DEST: Percent-encoded and canonicalized destination telephone number or URI, representing the final called party after any retargeting.
+- ORIG: Percent-encoded and canonicalized calling party TN or URI, typically from the SIP From or P-Asserted-Identity header.
+
+Canonicalization of TNs follows {{RFC8224}} and percent encoding of URIs follows {{RFC3986}}.
+
+#### Authorization JWT Requirements
+
+The JWT used to authorize this request MUST include:
+
+- "action": "retrieve"
+
+All other JWT validation requirements are defined in {{common-access-jwt}} and MUST also be enforced by the CPS.
+
+#### Response Definition
+
+Success:
 
 ~~~
+200 OK — PASSporT(s) retrieved successfully
+~~~
+
+Failure:
+
+~~~
+401 Unauthorized — JWT missing or invalid
+403 Forbidden — Certificate constraints violated
+404 Not Found — No PASSporTs available
+429 Too Many Requests — Rate limits exceeded
+503 Service Unavailable — CPS temporarily unavailable
+~~~
+
+Status codes MUST follow {{RFC6585}}. On 5xx failures, retrying another CPS endpoint MAY be allowed.
+
+Response Body (on success):
+
+~~~ json
+{
+  "passports": [
+    "eyJhbGciOiJFUzI1NiIsIn..." // Base64-encoded PASSporT string(s)
+  ],
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
+~~~
+
+- `passports`: An array of one or more PASSporT strings published by the originating party, in compact JWS serialization format as per {{RFC8225}}.
+- `response_uuid`: OPTIONAL. If present, provides the Connected Identity transaction UUID to which the called party can submit an identity response PASSporT using the appropriate API method. This value is provided only if included in the corresponding publish operation.
+
+#### Example Request
+
+~~~ http
+GET /passports/19032469103/12013776051 HTTP/1.1
+Host: cps.example.com
+Authorization: Bearer <Access JWT>
+~~~
+
+#### Example Response
+
+~~~ http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
 {
   "passports": [
     "eyJhbGciOiJFUzI1NiIsIn..."
   ],
-  "response_url": "https://cps.example.net/response/
-    123e4567-e89b-12d3-a456-426614174000"
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
 }
 ~~~
 
-The response_url is a transaction specific webhook endpoint provided by the CPS. It enables the called party (or its verification agent) to post a Connected Identity 'rsp' PASSporT response. This URL MUST be unique per transaction (e.g., UUID-based) and SHOULD only be disclosed to authorized entities as part of the retrieval interface. It MUST NOT be guessable or reused across transactions.
+#### Example Success and Error Responses
 
-The `response_url` MUST:
-
-- Be unique per publish transaction (e.g., UUID-based)
-- Be cryptographically unguessable
-- Expire after a defined short lifetime
-- Be visible only to authorized retrieval clients (never public or guessable)
-
-Note: Unlike the ATIS OOB model, the VESPER OOB interface does not support a "re-publish" operation. Therefore, the request MUST NOT include a "tokens" field or it will be otherwise ignored for VESPER OOB clients.
-
-#### Authorization JWT Requirements
-
-The JWT used to authorize this request MUST include an `"action"` claim with the value `"publish"`. This indicates that the bearer is authorized to publish PASSporTs on behalf of the originating party. All other JWT validation rules are covered in {{common-access-jwt}} above and MUST still be enforced by the CPS.
-
-#### Example JWT access token:
-
-Header:
-
-~~~ json
-{
-  "alg": "ES256",
-  "x5c": [
-    "MIIB3TCCAYOgAwIBAgIUUjF7Jq9kYfU12nJkBA==",
-    "IUUjF7Jq9kYfU12nJkBAMIIB3TCCAYOgAwIBAg=="
-  ]
-}
-~~~
-
-Payload (example for a publish request):
-
-~~~ json
-{
-  "iat": 1693590000,
-  "action": "publish",
-  "passports": "sha256-XyZabc123...",
-  "sub": "12013776051",
-  "iss": "12013776051",
-  "aud": "cps.example.net",
-  "jti": "550e8400-e29b-41d4-a716-446655440000",
-  "dest": {
-    "tn": ["19032469103"]
-  },
-  "orig": {
-    "tn": "12013776051"
-  }
-}
-~~~
-
-### Response definition
-
-Success:
-
-- 201 - Created if the PASSporTs were successfully published (even if republish propagation is still pending).
-
-Failure:
-
-- 400 - Bad Request if required fields are missing or malformed
-- 401 - Unauthorized if authentication fails
-- 403 - Forbidden if certificate constraints are not met
-- 429 - Too Many Requests if rate-limited
-- 5xx errors (e.g., 503 Service Unavailable) - if the server cannot process the request
-
-Responses MUST use status codes defined in RFC 6585 and SHOULD be informative when possible.
-
-PASSporTs and Connected Identity responses SHOULD be retained only for a short period of time unless longer retention is explicitly required by policy.
-
-Note: {{ATIS-1000096}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification should not support the initiation of this action or otherwise communicate to other CPSs supporting this specification 
-
-### Example Request:
-
-~~~
-POST /passports/19032469103/12013776051 HTTP/1.1
-Content-Type: application/json
-Content-Length: 423
-Host: cps.example.com
-Authorization: Bearer
-eyJhbGciOiJFUzI1NiIsIng1dSI6Imh0dHBzOi8vY2VydGlmaWNhdGVzLmV4YW1wbGU
-uY29tL2V4YW1wbGUuY3J0In0.eyJpYXQiOjE2OTM1OTAwMDAsImFjdGlvbiI6InB1Ym
-xpc2giLCJwYXNzcG9ydHMiOiJzaGEyNTYtWU80SHEveEU2bWtDZXVQb1lZY2s1UHQ2d
-kFDbWZiek5mZGk2YWVxOTVkQT0iLCJzdWIiOiIxMjAxMzc3NjA1MSIsImlzcyI6IjEy
-MDEzNzc2MDUxIiwiYXVkIjoiY3BzLmV4YW1wbGUubmV0IiwianRpIjoiNTUwZTg0MDA
-tZTI5Yi00MWQ0LWE3MTYtNDQ2NjU1NDQwMDAwIiwiZGVzdCI6eyJ0biI6WyIxOTAzMj
-Q2OTEwMyJdfSwib3JpZyI6eyJ0biI6IjEyMDEzNzc2MDUxIn19.8_1lwoansAWNV7Jb
-VNMCS_jqnfTpwLl28iOUdYIWctEZ4EBDQgB73u-GOU3ePgN1vWJHGS9IN9NUKC0i2S_
-5kw
-
-{"passports":["eyJhbGciOiJFUzI1NiIsInBwdCI6InNoYWtlbiIsInR5cCI6InBh
-c3Nwb3J0IiwieDV1IjoiaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMuZXhhbXBsZS5jb20vZXh
-hbXBsZS5jcnQifQ.eyJhdHRlc3QiOiJBIiwiZGVzdCI6eyJ0biI6WyIxOTAzMjQ2OTE
-wMyJdfSwiaWF0IjoxNTg0OTgzNDAyLCJvcmlnIjp7InRuIjoiMTIwMTM3NzYwNTEifS
-wib3JpZ2lkIjoiNGFlYzk0ZTItNTA4Yy00YzFjLTkwN2ItMzczN2JhYzBhODBlIn0.E
-MfXHyowsI5s73KqoBzJ9pzrrwGFNKBRmHcx-YZ3DjPgBe4Mvqq9N-bThN1_HTWeSvbr
-uAyet26fetRL1_bn1g"]}
-~~~
-
-Example Private Key used: 
-
------BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hb2
-OF/2NxApJCzGCEDdfSp6VQO30hyhRANCAAQRWz+jn65BtOMvdyHKcvjBeBSDZH2r
-1RTwjmYSi9R/zpBnuQ4EiMnCqfMPWiZqB4QdbAd0E7oH50VpuZ1P087G
------END PRIVATE KEY-----
-
-### Example Response:
-
-~~~
-HTTP/1.1 201 Created
-Content-Type: application/json
-Content-Length: 34
-{"status":201,"message":"Created"}
-~~~
-
-## GET /passports/{DEST}/{ORIG}
-
-The HTTPS interface for retrieving PASSporT(s) is accessed via a GET request to the path /passports/{DEST}/{ORIG}. The DEST and ORIG path parameters MUST be substituted as follows:
-
-- DEST: The percent-encoded and canonicalized destination telephone number (TN) or URI representing the final called party, derived from the SIP request URI after any retargeting. If the destination is not a valid telephone number, a percent-encoded URI MAY be used (e.g., urn:service:sos encoded as urn%3Aservice%3Asos).
-- ORIG: The percent-encoded and canonicalized calling party TN or URI, typically obtained from the SIP From or P-Asserted-Identity header. Canonicalization of TNs follows {{RFC8224}}, and percent encoding follows {{RFC3986}}.
-
-PASSporTs may not be retrievable if the original call used a URI-based identity that was altered or lost during protocol transitions (e.g., SIP -> TDM -> SIP).
-
-### Request definition
-
-Method: GET
-Path: /passports/{DEST}/{ORIG}
-Headers: Authorization: Bearer \<JWT\>
-
-#### Authorization JWT Requirements
-
-The JWT used to authorize this request MUST include an `"action"` claim with the value `"retrieve"`. This indicates that the bearer is authorized to retrieve PASSporTs for a call to the specified destination. All other JWT validation requirements are detailed in {{common-access-jwt}} and MUST also be enforced by the CPS.
-
-#### Example JWT access token:
-
-Header:
-
-~~~ json
-{
-  "alg": "ES256",
-  "x5c": [
-    "MIIB3TCCAYOgAwIBAgIUUjF7Jq9kYfU12nJkBA==",
-    "IUUjF7Jq9kYfU12nJkBAMIIB3TCCAYOgAwIBAg=="
-  ]
-}
-~~~
-
-Payload: 
-
-~~~ json
-{
-  "iat": 1608048420,
-  "action": "retrieve",
-  "sub": "12013776051",
-  "iss": "12013776051",
-  "aud": "cps.example.com",
-  "jti": "550e8400-e29b-41d4-a716-446655440000",
-  "dest": {
-    "tn": ["19032469103"]
-  },
-  "orig": {
-    "tn": "12013776051"
-  }
-}
-~~~
-
-### Response definition
-
-Success: 200 OK
-Header: Content-Type: application/json
-Body:
-
-~~~
-{
-  "passports": [
-    "eyJhbGciOiJFUzI1NiIsIn..."   
-  ],
-  "response_url": "https://cps.example.net/respond/
-    123e4567-e89b-12d3-a456-426614174000"
-}
-~~~
-
-Failure: status > 399
-
-- 401 Unauthorized - if the JWT is missing or invalid
-- 403 Forbidden - if certificate constraints are violated
-- 404 Not Found - if no PASSporTs are available
-- 429 Too Many Requests - if rate limits are exceeded
-- 503 Service Unavailable - if the CPS is temporarily unable to respond
-
-Response codes MUST follow guidance in {{RFC6585}}. If a 5xx response is received, the requester MAY attempt retrieval from an alternate CPS endpoint, subject to local policy.
-
-### Example Request
-
-~~~ http
-GET /passports/19032469103/12013776051 HTTP/1.1
-Content-Length: 0
-Host: cps.example.com
-Authorization: Bearer
-eyJhbGciOiJFUzI1NiIsIng1dSI6Imh0dHBzOi8vY2VydGlmaWNhdGVzLmV4YW1wbGU
-uY29tL2V4YW1wbGUuY3J0In0.eyJpYXQiOjE2MDgwNDg0NDQsImFjdGlvbiI6InJldH
-JpZXZlIiwic3ViIjoiMTIzNCIsImlzcyI6IjEyMzQiLCJhdWQiOiJjcHMuZXhhbXBsZ
-S5jb20iLCJqdGkiOiJiODBlMTAyMy04ZGM0LTQ2NWQtYTFhYS1mMDhlODhmODkyNjUi
-LCJkZXN0Ijp7InRuIjpbIjE5MDMyNDY5MTAzIl19LCJvcmlnIjp7InRuIjoiMTIwMTM
-3NzYwNTEifX0.k3S9oNyj9B8olbgaObL-eqdnCAB_sZaBOSuzfo8R7PDyqEBUOVvm-p
-FzG24giW8ztlg6339TerVQRGUQNhx9HQ
-~~~
-
-### Example Response
+Success Response (200 OK):
 
 ~~~ http
 HTTP/1.1 200 OK
 Content-Type: application/json
-Content-Length: 958
 
-{"passports":["eyJhbGciOiJFUzI1NiIsInBwdCI6InNoYWtlbiIsInR5cCI6InBhc
-3Nwb3J0IiwieDV1IjoiaHR0cHM6Ly9jZXJ0aWZpY2F0ZXMuZXhhbXBsZS5jb20vZXhh
-bXBsZS5jcnQifQ.eyJhdHRlc3QiOiJBIiwiZGVzdCI6eyJ0biI6WyIxOTAzMjQ2OTEw
-MyJdfSwiaWF0IjoxNTg0OTgzNDAyLCJvcmlnIjp7InRuIjoiMTIwMTM3NzYwNTEifSw
-ib3JpZ2lkIjoiNGFlYzk0ZTItNTA4Yy00YzFjLTkwN2ItMzczN2JhYzBhODBlIn0.EM
-fXHyowsI5s73KqoBzJ9pzrrwGFNKBRmHcx-YZ3DjPgBe4Mvqq9N-bThN1_HTWeSvbru
-Ayet26fetRL1_bn1g"]}
+{
+  "passports": [
+    "eyJhbGciOiJFUzI1NiIsIn..."
+  ],
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
 ~~~
 
-## Response Publishing using response_url
+Error Response (404 Not Found):
 
-When a `response_url` is included in the publish request, the CPS enables a Connected Identity flow by allowing the called party to post a signed `rsp` PASSporT.
+~~~ http
+HTTP/1.1 404 Not Found
+Content-Type: application/json
 
-### Method
+{
+  "status": 404,
+  "error": "No PASSporTs available for the requested origin and destination"
+}
+~~~
 
-POST /respond/{UUID}
+Error Response (403 Forbidden):
 
-Headers:
+~~~ http
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
 
-- Content-Type: application/json
-- Authorization: Bearer \<JWT\>
+{
+  "status": 403,
+  "error": "Caller is not authorized to retrieve PASSporTs for this identity"
+}
+~~~
 
-Body:
+#### Response Body Fields
+
+- `passports`: Array of PASSporT strings published by the originating party, encoded in compact JWS serialization.
+- `response_uuid`: (Optional) UUID that identifies a Connected Identity response transaction. Provided only if the CPS returned it during publish.
+
+### Respond Method: POST /respond/{UUID}
+
+This method allows the called party to submit a response PASSporT (rsp_passport) asserting their identity in a Connected Identity exchange. The UUID corresponds to the `response_uuid` originally returned by the CPS during the publish operation.
+
+#### Request Definition
+
+~~~ http
+Method: POST
+Path: /respond/{UUID}
+Authentication: Access JWT with "action": "respond"
+~~~
+
+#### Request Headers
+
+~~~ http
+Content-Type: application/json
+Authorization: Bearer <Access JWT>
+~~~
+
+#### Request Parameters
+
+- UUID: A unique response transaction identifier returned by the CPS in the publish response as `response_uuid`. This identifies the call session context for Connected Identity.
+
+#### Request Body
 
 ~~~ json
 {
@@ -565,41 +587,127 @@ Body:
 }
 ~~~
 
-### Authorization JWT Requirements
+- rsp_passport: REQUIRED. The PASSporT signed by the called party delegate certificate for Connected Identity.
 
-The JWT used to authorize this request MUST include an `"action"` claim with the value `"respond"`. This indicates the bearer is submitting a Connected Identity response on behalf of the called party. All other JWT validation requirements are defined in {{common-access-jwt}} and MUST be enforced by the CPS.
+#### Authorization JWT Requirements
 
-### Response Codes
+The JWT used to authorize this request MUST include:
 
-- 201 Created - response accepted
-- 404 Not Found - UUID not found or expired
-- 409 Conflict - response already submitted for this transaction
+- "action": "respond"
 
-PASSporTs and Connected Identity responses SHOULD be retained only for a short period unless longer retention is explicitly required by policy.
+All other JWT validation requirements are defined in {{common-access-jwt}} and MUST be enforced by the CPS.
 
-## Retrieving Connected Identity Responses
+#### Response Definition
 
-Once a response is submitted via `response_url`, the originating party may retrieve it in two ways using a polling interface using GET method or via a push interface using WSS.
+Success:
 
-## GET /passports/response/{UUID}
+~~~
+201 Created — The Connected Identity response was accepted.
+~~~
 
-Basic polling GET queried after a reasonable amount of time by calling party to check for any response
+Failure:
 
-### Request definition
+~~~
+401 Unauthorized — JWT missing or invalid.
+403 Forbidden — Certificate constraints violated.
+404 Not Found — UUID not found or expired.
+409 Conflict — A response has already been submitted.
+429 Too Many Requests — Rate limits exceeded.
+503 Service Unavailable — CPS temporarily unavailable.
+~~~
+
+Status codes MUST follow {{RFC6585}}. Connected Identity response PASSporTs SHOULD be retained only for a short period unless longer retention is explicitly required by policy.
+
+#### Example Request
+
+~~~ http
+POST /respond/123e4567-e89b-12d3-a456-426614174000 HTTP/1.1
+Host: cps.example.net
+Content-Type: application/json
+Authorization: Bearer <Access JWT>
+
+{
+  "rsp_passport": "eyJhbGciOiJFUzI1NiIsIn..."
+}
+~~~
+
+#### Example Response
+
+~~~ http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "status": 201,
+  "message": "Connected Identity Stored"
+}
+~~~
+
+#### Example Success and Error Responses
+
+Success Response (201 Created):
+
+~~~ http
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "status": 201,
+  "message": "Connected Identity Stored"
+}
+~~~
+
+Error Response (409 Conflict):
+
+~~~ http
+HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{
+  "status": 409,
+  "error": "A response for this UUID has already been submitted"
+}
+~~~
+
+Error Response (404 Not Found):
+
+~~~ http
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{
+  "status": 404,
+  "error": "UUID not found or expired"
+}
+~~~
+
+### Retrieving Connected Identity Responses
+
+Once a response is submitted using the `response_uuid`, the originating party may retrieve it in two ways using a polling interface (GET method) or via an optional push interface using WSS as detailed in the following methods.
+
+### Retrieve Response Method:  GET /passports/response/{UUID}
+
+This method allows the originating (calling) party to retrieve a Connected Identity response PASSporT, if one has been submitted by the called party. The UUID in this path is the same value (`response_uuid`) previously provided by the CPS in the response to the `POST /passports/{DEST}/{ORIG}` method.
+
+#### Request Definition
 
 ~~~ http
 Method: GET
 Path: /passports/response/{UUID}
-Headers: Authorization: Bearer \<JWT\>
+Headers: Authorization: Bearer <JWT>
 ~~~
 
-### Response definition
+#### Response Definition
 
-~~~ http
-Success: 200 OK
-Header: Content-Type: application/json
-Body:
-~~~
+Success:
+
+200 OK — Connected Identity response PASSporT retrieved successfully
+
+Failure:
+
+404 Not Found — No response is available yet
+
+#### Response Body
 
 ~~~ json
 {
@@ -609,9 +717,40 @@ Body:
 }
 ~~~
 
-Failure: 404 Not Found - if no response is available yet.
+#### Response Body Fields
 
-## Push Notification (Optional)
+- `rsp`: An object containing the Connected Identity response.
+  - `passport`: A PASSporT string signed by the called party using its delegate certificate.
+
+#### Example Success and Error Responses
+
+Success Response (200 OK):
+
+~~~ http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "rsp": {
+    "passport": "eyJhbGciOiJFUzI1NiIsIn..."
+  }
+}
+~~~
+
+Error Response (404 Not Found):
+
+~~~ http
+HTTP/1.1 404 Not Found
+Content-Type: application/json
+
+{
+  "status": 404,
+  "error": "No Connected Identity response has been submitted for 
+      this UUID"
+}
+~~~
+
+### Retrieve Response Push Methods (Optional)
 
 The CPS MAY support real-time delivery via:
 
@@ -622,11 +761,11 @@ Server-Sent Events (SSE): GET /passports/response/stream/{UUID}
 
 These interfaces allow immediate delivery of Connected Identity responses when available.
 
-## Example Request/Response Flow
+# Example VESPER OOB Request/Response Flow
 
-This example illustrates a full transaction using the updated Connected Identity webhook pattern.
+This example illustrates a full transaction using the Connected Identity UUID-based pattern.
 
-### Calling Party Publishes a PASSporT with a `response_url`
+## Calling Party Publishes a PASSporT
 
 ~~~ http
 POST /passports/19035551234/12015550100 HTTP/1.1
@@ -641,9 +780,7 @@ Body:
 {
   "passports": [
     "eyJhbGciOiJFUzI1NiIsIn..." // Signed PASSporT by calling party
-  ],
-  "response_url": "https://cps.example.net/respond/
-    123e4567-e89b-12d3-a456-426614174000"
+  ]
 }
 ~~~
 
@@ -653,10 +790,14 @@ Response:
 HTTP/1.1 201 Created
 Content-Type: application/json
 
-{"status":201,"message":"Created"}
+{
+  "status": 201,
+  "message": "Created",
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
+}
 ~~~
 
-### Called Party Retrieves PASSporT and Extracts response_url
+## Called Party Retrieves PASSporT and Extracts response_uuid
 
 ~~~ http
 GET /passports/19035551234/12015550100 HTTP/1.1
@@ -671,12 +812,11 @@ Response:
   "passports": [
     "eyJhbGciOiJFUzI1NiIsIn..."
   ],
-  "response_url": "https://cps.example.net/respond/
-    123e4567-e89b-12d3-a456-426614174000"
+  "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
 }
 ~~~
 
-### Called Party Submits a Connected Identity `rsp` PASSporT
+## Called Party Submits a Connected Identity `rsp` PASSporT
 
 ~~~ http
 POST /respond/123e4567-e89b-12d3-a456-426614174000 HTTP/1.1
@@ -702,7 +842,7 @@ Content-Type: application/json
 {"status":201,"message":"Connected Identity Stored"}
 ~~~
 
-### Calling Party Polls for the `rsp` PASSporT
+## Calling Party Polls for the `rsp` PASSporT
 
 ~~~ http
 GET /passports/response/123e4567-e89b-12d3-a456-426614174000 HTTP/1.1
@@ -720,9 +860,9 @@ Response:
 }
 ~~~
 
-This flow demonstrates the full cycle from publish to response using the webhook `response_url` model. Optionally, the final step may use SSE or WSS push interfaces instead of polling.
+This flow demonstrates the full cycle from publish to response using the Connected Identity UUID-based model. Optionally, the final step may use SSE or WSS push interfaces instead of polling.
 
-The VESPER OOB interface specification offers a modular architecture for telephony identity authentication. It supports both simple publish/retrieve workflows and bidirectional identity binding through Connected Identity. 
+The VESPER OOB interface specification offers a modular architecture for telephony identity authentication. It supports both simple publish/retrieve workflows and bidirectional identity binding through Connected Identity.
 
 # Authentication Service Procedures for VESPER OOB
 
@@ -750,7 +890,7 @@ The Authentication Service MUST also publish the signed PASSporT to the CPS endp
 
 CPS URIs are associated with the delegate certificates through the CPS URI extension defined in {{I-D.sliwa-stir-cert-cps-ext}}. Verifiers are expected to obtain the CPS URI for a specific telephone number via transparency-enabled discovery mechanisms described in {{I-D.sliwa-stir-oob-transparent-discovery}}. The CPS URI identifies the base URL for the Call Placement Service responsible for publishing and serving PASSporTs for calls associated with that telephone number.
 
-The CPS URI MUST resolve to a reachable and operational CPS that supports the VESPER OOB interface defined in this document. It is assumed that the CPS implements the endpoints defined in the HTTPS interface specification, including '/health', '/passports/{DEST}/{ORIG}', and appropriate authorization mechanisms.
+The CPS URI MUST resolve to a reachable and operational CPS that supports the VESPER OOB interface defined in this document. It is assumed that the CPS implements the endpoints defined in the HTTPS interface specification, including '/health', '/passports/{DEST}/{ORIG}', and appropriate authorization mechanisms. The CPS will provide a `response_uuid` in its response to the publish operation, which is used by the calling and called parties in subsequent API calls for Connected Identity.
 
 # Verification Service Procedures for VESPER OOB
 
@@ -780,6 +920,7 @@ Once retrieved, the verifier MUST:
 
 These validation steps ensure end-to-end trust in the originating identity of the call, even across heterogeneous network paths or in the absence of SIP Identity header delivery.
 
+
 # Privacy Considerations
 
 The VESPER OOB framework facilitates the transmission and verification of signed identity assertions that may include personally identifiable information (PII), such as telephone numbers and organizational names. This section outlines key privacy considerations to ensure implementations protect individual privacy and comply with applicable regulations.
@@ -806,6 +947,9 @@ Audit mechanisms and data subject request workflows SHOULD be implemented when o
 
 While logging of CPS activity is important for fraud detection and accountability, implementations MUST avoid logging full PASSporT payloads or tokens unless strictly necessary. Where logs include sensitive fields, they SHOULD be protected with access controls and subject to audit.
 
+The use of transaction-specific UUIDs instead of callback URLs minimizes the privacy exposure associated with publishing service endpoints. Only parties with the appropriate authorization token (Access JWT) can retrieve or respond to a PASSporT exchange, which helps ensure that identity data is not leaked to unauthorized entities. Connected Identity responses are associated only with the UUID provided to the intended recipient, reducing correlation risk across sessions.
+
+
 # Security Considerations
 
 ## Trust Anchors and Certificate Transparency
@@ -820,18 +964,17 @@ CPS servers that expose web-facing endpoints MAY implement CORS headers to restr
 
 CPS operators SHOULD log authentication attempts, JWT usage (by jti), PASSporT publication, and response_url usage for auditing and potential fraud investigation. Logs SHOULD be retained securely and in accordance with privacy regulations.
 
-## Future Threat Models
+## UUID-Based Transaction Integrity
 
-While this specification assumes delegate certificates are securely issued and authority tokens are not compromised, implementers SHOULD monitor evolving threats such as:
-- Misissued or misused delegate certificates
-- Replay of short-lived JWTs or tokens
-- Fraudulent calls using spoofed caller ID with valid signing keys
+The specification relies on cryptographically random UUIDs as transaction identifiers for Connected Identity responses. These UUIDs MUST be generated by the CPS using secure random generation techniques and MUST be unguessable to prevent targeted scraping or brute-force enumeration of published PASSporTs or responses.
 
-Mitigations may include:
-- Verifier correlation with call signaling metadata
-- Rate and behavior anomaly detection
-- Audit of delegate cert issuance via CT logs
+## Replay and Reuse Mitigation
 
+The use of the 'jti' (JWT ID) field in Access JWTs supports replay protection and auditability. CPS implementations SHOULD maintain short-term caches of recent JTIs and reject duplicate requests. JWTs MUST have short time-to-live values (e.g., 5 minutes) to reduce exposure from replay attacks.
+
+## CPS Operator Responsibilities
+
+CPS operators MUST enforce authorization controls and rate limiting across all endpoints. They are responsible for securing logs, ensuring endpoint availability, monitoring for anomalies, and maintaining certificate trust anchors. Any retained identity data MUST be stored securely and retained only as long as operationally necessary.
 
 
 # IANA Considerations
