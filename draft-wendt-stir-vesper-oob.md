@@ -1,6 +1,6 @@
 ---
 ###
-# VESPER Out‑of‑Band (OOB)
+# VESPER Out-of-Band (OOB)
 ###
 title: "VESPER Out-of-Band OOB"
 abbrev: "VESPER OOB"
@@ -32,10 +32,12 @@ author:
     fullname: Chris Wendt
     organization: Somos Inc.
     email: chris@appliedbits.com
+    country: US
  -
     fullname: Rob Sliwa
     organization: Somos Inc.
     email: robjsliwa@gmail.com
+    country: US
 
 normative:
   RFC3261:
@@ -140,18 +142,18 @@ General Operations:
 
 These required endpoints enable basic VESPER-OOB publish and retrieval functions:
 
-- GET /health — check service availability
-- POST /passports/{DEST}/{ORIG} — publish one or more signed PASSporTs, optionally with a 'response_uuid' for Connected Identity
-- GET /passports/{DEST}/{ORIG} — retrieve published PASSporTs and optionally discover an associated 'response_uuid'
+- GET /health - check service availability
+- POST /passports/{DEST}/{ORIG} - publish one or more signed PASSporTs, optionally with a 'response_uuid' for Connected Identity
+- GET /passports/{DEST}/{ORIG} - retrieve published PASSporTs and optionally discover an associated 'response_uuid'
 
 Connected Identity Extensions:
 
 These optional endpoints are used if a `response_uuid` was included in the publish operation and the recipient supports Connected Identity:
 
-- POST /respond/{UUID} — the called party submits a 'rsp' PASSporT
-- GET /passports/response/{UUID} — the caller polls for the response
-- GET /passports/response/stream/{UUID} — Server-Sent Events (SSE) push interface (optional)
-- wss://.../stream/respond/{UUID} — WebSocket push delivery (optional)
+- POST /respond/{UUID} - the called party submits a 'rsp' PASSporT
+- GET /passports/response/{UUID} - the caller polls for the response
+- GET /passports/response/stream/{UUID} - Server-Sent Events (SSE) push interface (optional)
+- wss://.../stream/respond/{UUID} - WebSocket push delivery (optional)
 
 All endpoints MUST be served over HTTPS. The POST endpoint MUST require authentication Access JWT. The GET endpoint MAY be unauthenticated. CPS operators SHOULD additionally enforce rate-limits and access-control policies.
 
@@ -182,7 +184,7 @@ The Access JWT payload MUST contain the following claims:
 
 | Claim         | Description                                                      |
 |---------------|------------------------------------------------------------------|
-| 'iat'         | Issued-at timestamp (Unix time). MUST be recent (≤ 5 min skew).  |
+| 'iat'         | Issued-at timestamp (Unix time). MUST be recent (< 5 min skew).  |
 | 'jti'         | Unique token ID. SHOULD be used for replay prevention and audit. |
 | 'action'      | Operation intent: "publish", "retrieve", or "respond".           |
 | 'aud'         | The CPS hostname (e.g., "cps.example.net"). MUST match the target server. |
@@ -274,8 +276,8 @@ Authentication: None required
 
 #### Response Definition
 
-200 OK — Service operational  
-503 Service Unavailable — Service not operational  
+200 OK - Service operational  
+503 Service Unavailable - Service not operational  
 Body (optional):
 
 ~~~ json
@@ -464,17 +466,17 @@ All other JWT validation requirements are defined in {{common-access-jwt}} and M
 Success:
 
 ~~~
-200 OK — PASSporT(s) retrieved successfully
+200 OK - PASSporT(s) retrieved successfully
 ~~~
 
 Failure:
 
 ~~~
-401 Unauthorized — JWT missing or invalid
-403 Forbidden — Certificate constraints violated
-404 Not Found — No PASSporTs available
-429 Too Many Requests — Rate limits exceeded
-503 Service Unavailable — CPS temporarily unavailable
+401 Unauthorized - JWT missing or invalid
+403 Forbidden - Certificate constraints violated
+404 Not Found - No PASSporTs available
+429 Too Many Requests - Rate limits exceeded
+503 Service Unavailable - CPS temporarily unavailable
 ~~~
 
 Status codes MUST follow {{RFC6585}}. On 5xx failures, retrying another CPS endpoint MAY be allowed.
@@ -608,18 +610,18 @@ All other JWT validation requirements are defined in {{common-access-jwt}} and M
 Success:
 
 ~~~
-201 Created — The Connected Identity response was accepted.
+201 Created - The Connected Identity response was accepted.
 ~~~
 
 Failure:
 
 ~~~
-401 Unauthorized — JWT missing or invalid.
-403 Forbidden — Certificate constraints violated.
-404 Not Found — UUID not found or expired.
-409 Conflict — A response has already been submitted.
-429 Too Many Requests — Rate limits exceeded.
-503 Service Unavailable — CPS temporarily unavailable.
+401 Unauthorized - JWT missing or invalid.
+403 Forbidden - Certificate constraints violated.
+404 Not Found - UUID not found or expired.
+409 Conflict - A response has already been submitted.
+429 Too Many Requests - Rate limits exceeded.
+503 Service Unavailable - CPS temporarily unavailable.
 ~~~
 
 Status codes MUST follow {{RFC6585}}. Connected Identity response PASSporTs SHOULD be retained only for a short period unless longer retention is explicitly required by policy.
@@ -707,11 +709,11 @@ Headers: Authorization: Bearer <JWT>
 
 Success:
 
-200 OK — Connected Identity response PASSporT retrieved successfully
+200 OK - Connected Identity response PASSporT retrieved successfully
 
 Failure:
 
-404 Not Found — No response is available yet
+404 Not Found - No response is available yet
 
 #### Response Body
 
@@ -1026,4 +1028,4 @@ This document has no IANA actions.
 # Acknowledgments
 {:numbered="false"}
 
-The authors thank the contributors of the STIR working group and authors of ATIS-1000096, many of the concepts and mechanisms have been aligned and extended in this document to support the Vesper OOB Framework for PASSporT delivery signed with delegate certificates.
+The authors thank the contributors of the STIR working group and authors of ATIS-1000096, many of the API mechanisms have been aligned and extended in this document to support the Vesper OOB Framework for PASSporT delivery signed with delegate certificates.
