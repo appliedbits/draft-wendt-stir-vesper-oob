@@ -6,7 +6,7 @@ title: "VESPER Out-of-Band OOB"
 abbrev: "VESPER OOB"
 category: std
 
-docname: draft-wendt-stir-vesper-oob-00
+docname: draft-wendt-stir-vesper-oob-01
 submissiontype: IETF  # also: "independent", "editorial", "IAB", or "IRTF"
 number:
 date:
@@ -34,7 +34,7 @@ author:
     email: chris@appliedbits.com
     country: US
  -
-    fullname: Rob Sliwa
+    fullname: Rob &#x015A;liwa
     organization: Somos Inc.
     email: robjsliwa@gmail.com
     country: US
@@ -59,11 +59,11 @@ normative:
   I-D.ietf-httpapi-idempotency-key-header:
 
 informative:
-  ATIS-1000096: 
-    title: "ATIS-1000096 - Technical Report on SHAKEN Out-of-Band PASSporT Transmission Involving TDM-SIP Interworking"
+  ATIS-1000105: 
+    title: "ATIS-1000105 - Signature-based Handling of Asserted information using Tokens (SHAKEN): Out-of-Band PASSporT Transmission Between Service Providers that Interconnect using TDM"
     author: 
       - org: ATIS
-    target: https://access.atis.org/apps/group_public/download.php/52450/ATIS-1000096.pdf
+    target: https://access.atis.org/higherlogic/ws/public/download/79509/ATIS-1000105.pdf
 
 --- abstract
 
@@ -136,7 +136,7 @@ Figure 1 - Architecture showing both in-band and out-of-band PASSporT delivery
 
 # HTTPS Interface Specification
 
-The interface design is conceptually aligned with the interface model described in {{ATIS-1000096}} Section 7. It supports two categories of HTTPS methods:
+The interface design is conceptually aligned with the interface model described in {{ATIS-1000105}} Section 7. It supports two categories of HTTPS methods:
 
 General Operations:
 
@@ -185,6 +185,7 @@ The Access JWT payload MUST contain the following claims:
 | Claim         | Description                                                      |
 |---------------|------------------------------------------------------------------|
 | 'iat'         | Issued-at timestamp (Unix time). MUST be recent (< 5 min skew).  |
+| 'exp'         | Timestamp indicating the time the call is guaranteed to complete  |
 | 'jti'         | Unique token ID. SHOULD be used for replay prevention and audit. |
 | 'action'      | Operation intent: "publish", "retrieve", or "respond".           |
 | 'aud'         | The CPS hostname (e.g., "cps.example.net"). MUST match the target server. |
@@ -203,6 +204,7 @@ Publish Token (Calling Party):
 ~~~ json
 {
   "iat": 1693590000,
+  "exp": 1608048425, 
   "jti": "550e8400-e29b-41d4-a716-446655440000",
   "action": "publish",
   "aud": "cps.example.net",
@@ -293,7 +295,7 @@ This method allows the calling party to publish one or more signed PASSporTs ass
 
 PASSporTs and Connected Identity response PASSporTs SHOULD be retained only for a short period of time unless longer retention is explicitly required by policy.
 
-Note: {{ATIS-1000096}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification are not dependent on support the initiation of this action or otherwise communicate to other CPSs supporting this specification including the inclusion of "token" fields, but the intent is to be compatible with implementations that support both specifications
+Note: {{ATIS-1000105}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification are not dependent on support the initiation of this action or otherwise communicate to other CPSs supporting this specification including the inclusion of "token" fields, but the intent is to be compatible with implementations that support both specifications
 
 #### Request definition
 
@@ -1028,4 +1030,4 @@ This document has no IANA actions.
 # Acknowledgments
 {:numbered="false"}
 
-The authors thank the contributors of the STIR working group and authors of ATIS-1000096, many of the API mechanisms have been aligned and extended in this document to support the Vesper OOB Framework for PASSporT delivery signed with delegate certificates.
+The authors thank the contributors of the STIR working group and authors of ATIS-1000105, many of the API mechanisms have been aligned and extended in this document to support the Vesper OOB Framework for PASSporT delivery signed with delegate certificates.
