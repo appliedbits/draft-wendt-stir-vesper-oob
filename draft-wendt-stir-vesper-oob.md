@@ -1,19 +1,16 @@
 ---
-###
-# VESPER Out-of-Band (OOB)
-###
 title: "VESPER Out-of-Band OOB"
 abbrev: "VESPER OOB"
 category: std
 
-docname: draft-wendt-stir-vesper-oob-01
+docname: draft-wendt-stir-vesper-oob-02
 submissiontype: IETF  # also: "independent", "editorial", "IAB", or "IRTF"
 number:
 date:
 consensus: true
 v: 3
-area: AREA
-workgroup: WG Working Group
+area: "Applications and Real-Time"
+workgroup: "Secure Telephone Identity Revisited"
 keyword:
 - stir
 - certificates
@@ -46,22 +43,21 @@ normative:
   RFC6585:
   RFC8224:
   RFC8225:
+  RFC8226:
   RFC8785:
   RFC8816:
   RFC9060:
   RFC9447:
-  I-D.wendt-stir-certificate-transparency:
+  I-D.ietf-stir-certificate-transparency:
   I-D.wendt-stir-vesper:
-  I-D.wendt-stir-vesper-use-cases:
   I-D.sliwa-stir-cert-cps-ext:
-  I-D.sliwa-stir-oob-transparent-discovery:
   I-D.ietf-stir-rfc4916-update:
   I-D.ietf-httpapi-idempotency-key-header:
 
 informative:
-  ATIS-1000105: 
+  ATIS-1000105:
     title: "ATIS-1000105 - Signature-based Handling of Asserted information using Tokens (SHAKEN): Out-of-Band PASSporT Transmission Between Service Providers that Interconnect using TDM"
-    author: 
+    author:
       - org: ATIS
     target: https://access.atis.org/higherlogic/ws/public/download/79509/ATIS-1000105.pdf
 
@@ -75,42 +71,40 @@ This document describes a mechanism for delivering authenticated telephone call 
 
 The STIR framework enables the signing and verification of telephone calls using PASSporT {{RFC8225}} objects carried in SIP {{RFC3261}} in Identity Header Fields defined in {{RFC8224}}. However, there are scenarios where SIP-based in-band transmission is not feasible or the Identity Header Field may not be supported, such as legacy TDM interconnects or where intermediary network elements strip SIP Identity headers. STIR Out-of-Band (OOB) {{RFC8816}} addresses this generally for STIR by defining an OOB delivery model.
 
-The VESPER framework {{I-D.wendt-stir-vesper}} extends the STIR framework by introducing support for vetted delegate certificates using authority tokens and certificate transparency logs and monitoring to enhance reliability and trust for the delegation of telephone number specific certificates and the associated claims authorized to be made by the use of those certificates for signed PASSporTs. The use cases motivating these enhancements are outlined in {{I-D.wendt-stir-vesper-use-cases}}.
+The VESPER framework {{I-D.wendt-stir-vesper}} extends the STIR architecture by introducing delegate certificates issued under authority tokens and recorded in certificate transparency logs, strengthening the association between telephone number assignments and the entities authorized to use them in signed PASSporTs.
 
-This document describes how to expand the VESPER framework to use an out-of-band delivery mechanism corresponding to the model described in {{RFC8816}}. The VESPER framework defines how delegate certificates are issued based on authority tokens that attest to the vetting and authorization of the entity to use a telephone number and assert other related claim information. This specification extends this to enable authorized delegate certificate holders, who sign calls via a STIR Authentication Service, to deliver PASSporTs containing authorized, verifiable claims over a non-SIP-based path. These PASSporTs can be retrieved and validated by a STIR Verification Service, similar to SIP-based STIR as defined in {{RFC8224}}, thereby maintaining continuity of trust across heterogeneous networks.
+This document defines how the VESPER framework extends to an out-of-band delivery mechanism corresponding to the model described in {{RFC8816}}. It enables authorized delegate certificate holders to deliver PASSporTs over a non-SIP-based path for retrieval and validation by a STIR Verification Service, maintaining continuity of trust across heterogeneous networks.
 
-OOB delivery is critical in extending the utility of STIR to networks where SIP identity headers cannot be delivered end-to-end. It provides a verifiable alternative path for transmitting PASSporTs and proving the originating telephone number's association to the signing identity.
-
-The Vesper OOB delivery model assumes a one-way publish-and-retrieve interface based on a defined open discovery model for Call Placement Services (CPS). This document extends the concepts in {{RFC8816}} to specifically define an HTTPS-based interface for publishing and retrieving VESPER PASSporTs. It utilizes the following: 
+The VESPER OOB delivery model is based on a publish-and-retrieve interface using an open discovery model for Call Placement Services (CPS). This document extends the concepts in {{RFC8816}} to specifically define an HTTPS-based interface for publishing and retrieving VESPER PASSporTs. It utilizes the following:
 
 - A mechanism for announcing the associated OOB Call Placement Services (CPSs) using the CPS URI extension defined in {{I-D.sliwa-stir-cert-cps-ext}}.
-- A discovery mechanism for OOB endpoints based on {{I-D.sliwa-stir-oob-transparent-discovery}} with the corresponding Vesper requirement to utilize and verify STI certificate transparency receipts with delegate certificates used in Vesper OOB.
+- A discovery mechanism for OOB endpoints using STI certificate transparency log monitoring, where CPS URIs embedded in delegate certificates become publicly discoverable when those certificates are logged.
 
-It also optionally supports the STIR concept of Connected Identity adopted in VESPER framework as well, where not only the originator of a call or message can authenticate their telephone number, but the destination party can also prove their telephone number back to the originator to have a full end-to-end bi-directional trust relationship.  This is based on Connected Identity defined in {{I-D.ietf-stir-rfc4916-update}} and also adopted by VESPER {{I-D.wendt-stir-vesper}}.
+It also optionally supports Connected Identity {{I-D.ietf-stir-rfc4916-update}}, enabling both parties to authenticate their telephone numbers and establish end-to-end identity assurance, as also adopted by VESPER {{I-D.wendt-stir-vesper}}.
 
 # Conventions and Definitions
 
 {::boilerplate bcp14-tagged}
 
-VESPER: Verifiable Entity STIR Passport Entity Representation {{I-D.wendt-stir-vesper}}.
+VESPER: Verifiable STI Presentation and Evidence for RTU {{I-D.wendt-stir-vesper}}.
 
 PASSporT: Personal Assertion Token as defined in {{RFC8225}}.
 
-Delegate Certificate: A certificate issued to an enterprise or user entity asserting right-to-use for a telephone number, based on an authority token, defined in {{RFC9060}}.
+Delegate Certificate: A certificate issued to an entity asserting right-to-use for a telephone number, based on an authority token, as defined in {{RFC9060}} and profiled in {{I-D.wendt-stir-vesper}}.
 
-Authority Token: A signed assertion that authorizes the issuance of a delegate certificate and represents the vetting of a subject's control over a telephone number and any associated claims defined in {{RFC9447}}.
+Authority Token: A signed assertion that authorizes the issuance of a delegate certificate and represents the authorization of a subject's right-to-use a telephone number and any associated claims, defined in {{RFC9447}}.
 
 CPS URI: Call Placement Service (CPS) URI extension in X.509 certs {{I-D.sliwa-stir-cert-cps-ext}}.
 
-CPS Discovery: Defines the use of STI certificate transparency log monitoring and CPS URI extension in certificates for announcing CPS locations for certificates {{I-D.sliwa-stir-oob-transparent-discovery}}.
+CPS Discovery: The process of identifying the CPS endpoint responsible for a given TN or SPC by monitoring STI-CT logs for delegate certificates containing the CPS URI extension defined in {{I-D.sliwa-stir-cert-cps-ext}}.
 
-# Vesper OOB Architectural Overview
+# VESPER OOB Architectural Overview
 
-The VESPER OOB architecture consists of three main functional components that work together to enable the out-of-band signing, publishing, discovery, and verification of PASSporTs using a trust framework based on delegate certificates and transparency mechanisms. These components interact across SIP and HTTPS protocols to support both simulataneous and parallel in-band and out-of-band delivery of telephone number authentication information, ensuring interoperability across a variety of telephony related network environments. Figure 1 illustrates the flow of identity data between the authentication service, the out-of-band Call Placement Service (CPS), and the verification service.
+The VESPER OOB architecture enables the out-of-band signing, publishing, discovery, and verification of PASSporTs using a trust framework based on delegate certificates and transparency mechanisms. These components interact across SIP and HTTPS protocols to support parallel in-band and out-of-band delivery of telephone number authentication information. Figure 1 illustrates the flow of identity data between the authentication service, the out-of-band Call Placement Service (CPS), and the verification service.
 
 ~~~
         +--------------------+  Send SIP INVITE /w Identity
-        |   Authentication   |  Header Field (RFC8824/VESPER AS)
+        |   Authentication   |  Header Field (RFC8224/VESPER AS)
         |     Service        |-------------------+
         |  (Calling Party)   |                   |
         +---------+----------+                   |
@@ -120,7 +114,7 @@ The VESPER OOB architecture consists of three main functional components that wo
                   v                          .~~~~~~~~~~.
         +---------+----------+           .-''             '-.
         |        CPS         |        ,.'   SIP-based VoIP  '.
-        |      (HTTPS)       |       /        Routing        |      
+        |      (HTTPS)       |       /        Routing        |
         +---------+----------+      |         Network       /
                   ^                  '.___..~~~~~~..______.'
                   |                              |
@@ -130,7 +124,7 @@ The VESPER OOB architecture consists of three main functional components that wo
         |    Verification    |                   |
         |      Service       |<------------------+
         |   (Called Party)   |  Receive SIP INVITE /w Identity
-        +--------------------+  Header Field (RFC8824/VESPER VS)
+        +--------------------+  Header Field (RFC8224/VESPER VS)
 ~~~
 Figure 1 - Architecture showing both in-band and out-of-band PASSporT delivery
 
@@ -176,7 +170,7 @@ All CPS interfaces that require authorization MUST support Access JWTs signed us
 ~~~
 
 - 'alg': MUST be "ES256" as required by STIR PASSporT and VESPER.
-- 'x5c': An array of base64-encoded certificates representing the end-entity delegate certificate and any intermediate certificates with an optionally included root certificate. These MUST be validated against a STIR eco-system trusted root.
+- 'x5c': An array of base64-encoded certificates representing the end-entity delegate certificate and any intermediate certificates with an optionally included root certificate. These MUST be validated against the trust anchors defined in the certificate policy defined in {{RFC8226}}.
 
 ### Access JWT Claims
 
@@ -204,7 +198,7 @@ Publish Token (Calling Party):
 ~~~ json
 {
   "iat": 1693590000,
-  "exp": 1608048425, 
+  "exp": 1608048425,
   "jti": "550e8400-e29b-41d4-a716-446655440000",
   "action": "publish",
   "aud": "cps.example.net",
@@ -271,15 +265,15 @@ The CPS MUST validate the Access JWT as follows:
 #### Request Definition
 
 ~~~ http
-Method: GET  
-Path: /health  
+Method: GET
+Path: /health
 Authentication: None required
 ~~~
 
 #### Response Definition
 
-200 OK - Service operational  
-503 Service Unavailable - Service not operational  
+200 OK - Service operational
+503 Service Unavailable - Service not operational
 Body (optional):
 
 ~~~ json
@@ -297,7 +291,7 @@ PASSporTs and Connected Identity response PASSporTs SHOULD be retained only for 
 
 Note: {{ATIS-1000105}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification are not dependent on support the initiation of this action or otherwise communicate to other CPSs supporting this specification including the inclusion of "token" fields, but the intent is to be compatible with implementations that support both specifications
 
-#### Request definition
+#### Request Definition
 
 ~~~ http
 Method: POST
@@ -316,7 +310,7 @@ The server SHOULD support an Idempotency-Key request header {{I-D.ietf-httpapi-i
 
 #### Request Parameters
 
-DEST: Canonicalized and percent-encoded destination telephone number or URI. <br/>
+DEST: Canonicalized and percent-encoded destination telephone number or URI.
 ORIG: Canonicalized and percent-encoded originating telephone number or URI.
 
 Canonicalization of TNs follows {{RFC8224}} and percent encoding of URIs follows {{RFC3986}}.
@@ -350,7 +344,7 @@ Content-Type: application/json
 }
 ~~~
 
-#### Response definition
+#### Response Definition
 
 Success Codes
 
@@ -488,7 +482,7 @@ Response Body (on success):
 ~~~ json
 {
   "passports": [
-    "eyJhbGciOiJFUzI1NiIsIn..." // Base64-encoded PASSporT string(s)
+    "eyJhbGciOiJFUzI1NiIsIn..."
   ],
   "response_uuid": "123e4567-e89b-12d3-a456-426614174000"
 }
@@ -556,8 +550,8 @@ Content-Type: application/json
 
 {
   "status": 403,
-  "error": "Caller is not authorized to retrieve PASSporTs for this 
-    identity"
+  "error": "Caller is not authorized to retrieve PASSporTs for 
+    this identity"
 }
 ~~~
 
@@ -695,7 +689,7 @@ Content-Type: application/json
 
 Once a response is submitted using the `response_uuid`, the originating party may retrieve it in two ways using a polling interface (GET method) or via an optional push interface using WSS as detailed in the following methods.
 
-### Retrieve Response Method:  GET /passports/response/{UUID}
+### Retrieve Response Method: GET /passports/response/{UUID}
 
 This method allows the originating (calling) party to retrieve a Connected Identity response PASSporT, if one has been submitted by the called party. The UUID in this path is the same value (`response_uuid`) previously provided by the CPS in the response to the `POST /passports/{DEST}/{ORIG}` method.
 
@@ -756,7 +750,7 @@ Content-Type: application/json
 {
   "status": 404,
   "error": "No Connected Identity response has been submitted for 
-      this UUID"
+    this UUID"
 }
 ~~~
 
@@ -789,7 +783,7 @@ Body:
 ~~~
 {
   "passports": [
-    "eyJhbGciOiJFUzI1NiIsIn..." // Signed PASSporT by calling party
+    "eyJhbGciOiJFUzI1NiIsIn..."
   ]
 }
 ~~~
@@ -880,8 +874,9 @@ When participating in VESPER OOB, Authentication Services that sign PASSporTs MU
 
 ## Delegate Certificate Requirements
 
-Delegate certificates used to sign PASSporTs in VESPER OOB MUST be issued under authority tokens that represent an explicit right-to-use a telephone number.  These certificates MUST include:
-- One or more Signed Certificate Timestamps (SCTs) from certificate transparency logs as defined in {{I-D.wendt-stir-certificate-transparency}}.
+Delegate certificates used to sign PASSporTs in VESPER OOB MUST be issued under authority tokens that represent an explicit right-to-use a telephone number. These certificates MUST include:
+
+- One or more Signed Certificate Timestamps (SCTs) from certificate transparency logs as defined in {{I-D.ietf-stir-certificate-transparency}}.
 - A CPS URI in the Call Placement Service (CPS) X.509 extension, enabling discovery of the associated OOB Call Placement Service (CPS) as defined in {{I-D.sliwa-stir-cert-cps-ext}}.
 
 ## PASSporT Construction Requirements
@@ -893,22 +888,26 @@ PASSporTs signed in a VESPER OOB deployment MUST meet the following conditions:
 - The 'dest' claim MUST reflect the final destination of the call after any retargeting.
 - The 'iat' claim MUST represent a timestamp within an acceptable freshness window (e.g., 5 minutes).
 - The JWT 'x5c' header MUST contain the certificate chain including the delegate certificate and its SCT(s).
+- The JWT 'x5u' header MUST contain the HTTPS URL of the delegate certificate at its location in the domain-controlled repository, and the domain in that URL MUST match the dNSName SubjectAltName of the signing certificate.
 
 The Authentication Service MUST also publish the signed PASSporT to the CPS endpoint identified by the CPS URI in the delegate certificate.
 
 # CPS URI and OOB CPS Discovery
 
-CPS URIs are associated with the delegate certificates through the CPS URI extension defined in {{I-D.sliwa-stir-cert-cps-ext}}. Verifiers are expected to obtain the CPS URI for a specific telephone number via transparency-enabled discovery mechanisms described in {{I-D.sliwa-stir-oob-transparent-discovery}}. The CPS URI identifies the base URL for the Call Placement Service responsible for publishing and serving PASSporTs for calls associated with that telephone number.
+CPS URIs are associated with VESPER delegate certificates through the CPS URI extension defined in {{I-D.sliwa-stir-cert-cps-ext}}. This extension embeds an HTTPS URI identifying the CPS endpoint responsible for publishing and serving PASSporTs for the telephone numbers and SPCs covered by the certificate's TNAuthList.
 
-The CPS URI MUST resolve to a reachable and operational CPS that supports the VESPER OOB interface defined in this document. It is assumed that the CPS implements the endpoints defined in the HTTPS interface specification, including '/health', '/passports/{DEST}/{ORIG}', and appropriate authorization mechanisms. The CPS will provide a `response_uuid` in its response to the publish operation, which is used by the calling and called parties in subsequent API calls for Connected Identity.
+When a VESPER delegate certificate containing a CPS URI extension is submitted to a STI-CT log, the CPS URI becomes publicly visible and verifiable. Parties that wish to discover the CPS for a given telephone number do so by monitoring STI-CT logs for delegate certificates that include a CPS URI extension, extracting the TNAuthList and CPS URI from each certificate, and associating the covered TNs or SPCs with the indicated CPS endpoint. This approach provides a transparent, cryptographically verifiable discovery mechanism that does not require bilateral provisioning or static configuration between service providers.
 
-///////////
-Delegate certificates MUST reference a CPS via the CPS URI extension and MUST be resolvable through the Discovery service specified for Vesper OOB. The Discovery service MUST return multiple CPS instances for each delegate certificate to provide redundancy. Operators SHOULD advertise regional or edge CPS instances to improve latency and availability for verifiers and retrievers.
+The discovery process follows these steps:
 
-Verifiers and retrievers MUST implement endpoint failover across the set of CPS instances provided by Discovery and SHOULD select among them using local policy (e.g., lowest latency or geographically closest instances).
+1. A VESPER delegate certificate containing a TNAuthList and CPS URI extension is issued and submitted to a STI-CT log, generating an SCT.
+2. A monitoring party observes the log, verifies the certificate chain to a trusted STI root, validates the SCT, and extracts the TN-to-CPS and SPC-to-CPS mappings.
+3. Authentication Services and Verification Services consult these mappings to identify the appropriate CPS endpoint for a given call.
+4. PASSporTs are published or retrieved using the discovered CPS URI as part of the OOB authentication process.
 
-Deployments that also support CPS-to-CPS replication MAY perform inter-CPS propagation by invoking the publish API using "action": "republish" semantics. In this mode, a CPS acts as a client to peer CPS servers to broaden availability of published PASSporTs. The wire format and validation requirements are otherwise identical to "action": "publish", except the policy MUST authorize the republish CPS to perform this operation.
-///////////
+Implementations MAY maintain local caches of TN-to-CPS mappings, respecting certificate validity periods when using extracted data. CPS operators SHOULD publish delegate certificates in multiple STI-CT logs to ensure broad visibility. The CPS URI MUST resolve to a reachable and operational CPS that supports the VESPER OOB interface defined in this document.
+
+To support resilience, operators SHOULD advertise multiple CPS instances, including regional or edge instances to improve latency and availability. Implementations SHOULD implement endpoint failover across available CPS instances, selecting among them using local policy such as lowest latency or geographic proximity.
 
 # Verification Service Procedures for VESPER OOB
 
@@ -916,7 +915,7 @@ Verification Services that retrieve and validate PASSporTs via the VESPER OOB mo
 
 ## Retrieval and Validation Process
 
-- CPS URI Resolution: Retrieve the CPS URI from an appropriate CPS discovery service as discussed and defined in {{I-D.sliwa-stir-oob-transparent-discovery}} to locate the specific '/passports/{DEST}/{ORIG}' endpoint.
+- CPS URI Resolution: Determine the CPS URI for the given TN or SPC by consulting TN-to-CPS mappings derived from monitoring STI-CT logs for delegate certificates containing the CPS URI extension, as described in the CPS URI and OOB CPS Discovery section of this document.
 - PASSporT Retrieval: Submit a 'GET' request to the CPS endpoint using a properly formed JWT in the Authorization header.
 - Authentication JWT Validation: Ensure the JWT is:
   - Signed by a valid STI certificate that chains to a trusted root.
@@ -928,25 +927,26 @@ Verification Services that retrieve and validate PASSporTs via the VESPER OOB mo
 
 Once retrieved, the verifier MUST:
 
-- Validate the PASSporT signature using the provided certificate referenced in the 'x5c' Header.
+- Validate the PASSporT signature using the certificate chain in the 'x5c' header.
+- Confirm that the domain in the 'x5u' URL matches the dNSName SubjectAltName of the signing certificate.
 - Verify that the delegate certificate:
   - Is valid and chains to a trusted authority.
-  - Contains valid SCTs proving inclusion in a certificate transparency log.
-  - Was issued under a valid, verifiable authority token (directly or via reference).
+  - Contains valid SCTs proving inclusion in a certificate transparency log as defined in {{I-D.ietf-stir-certificate-transparency}}.
+  - Was issued under a valid, verifiable authority token.
 - Check that the 'iat' claim is within an acceptable range relative to the call time.
-- Optionally, verify the transparency receipt (if present) that correlates the certificate and signing event.
 
 These validation steps ensure end-to-end trust in the originating identity of the call, even across heterogeneous network paths or in the absence of SIP Identity header delivery.
 
 ## Connected Identity Validation
 
-When a Connected Identity response PASSporT (`rsp`) is retrieved by the Verification Service (VS), it MUST be validated in accordance with the procedures defined in [I-D.ietf-stir-rfc4916-update] and the VESPER framework [I-D.wendt-stir-vesper].
+When a Connected Identity response PASSporT (`rsp`) is retrieved by the Verification Service (VS), it MUST be validated in accordance with the procedures defined in {{I-D.ietf-stir-rfc4916-update}} and the VESPER framework {{I-D.wendt-stir-vesper}}.
 
 Specifically:
 
 The `rsp` PASSporT MUST be signed using a valid VESPER delegate certificate associated with the `dest` telephone number of the original call.
 
 The certificate used to sign the `rsp` PASSporT MUST:
+
 - Be issued under a valid authority token authorizing use of the `dest` number.
 - Contain TNAuthList values that include the `dest` identifier.
 - Include valid Signed Certificate Timestamps (SCTs) from a Certificate Transparency log.
@@ -954,6 +954,7 @@ The certificate used to sign the `rsp` PASSporT MUST:
 The VS MUST validate the PASSporT signature and the delegate certificate's trust chain, including SCT verification and certificate expiration status.
 
 The VS MUST confirm that the `orig` and `dest` claims in the `rsp` PASSporT match those of the original call. That is:
+
 - The `orig` claim in the `rsp` PASSporT MUST match the `orig` claim of the original PASSporT.
 - The `dest` claim in the `rsp` PASSporT MUST match the `dest` claim of the original PASSporT.
 
@@ -963,63 +964,11 @@ The `iat` claim in the `rsp` PASSporT MUST be within an acceptable freshness int
 
 If these validations succeed, the verifier can confirm that the called party has cryptographically asserted its identity using a VESPER-authorized certificate, completing the Connected Identity flow. Any failure in these validations MUST cause the `rsp` PASSporT to be rejected.
 
-# Privacy Considerations
-
-The VESPER OOB framework facilitates the transmission and verification of signed identity assertions that may include personally identifiable information (PII), such as telephone numbers and organizational names. This section outlines key privacy considerations to ensure implementations protect individual privacy and comply with applicable regulations.
-
-## Minimization of Identity Claims
-
-PASSporTs exchanged via VESPER OOB SHOULD contain only the minimum necessary identity claims to establish the intended trust relationship. The inclusion of unnecessary claims in the PASSporT payload or certificate extensions may reveal sensitive information about users or organizations. Implementations SHOULD avoid including additional metadata beyond what is required for call verification.
-
-## Use of Connected Identity
-
-The Connected Identity feature allows both parties in a communication to share independently signed identity assertions. While this can enhance trust, it also introduces a risk of correlation between calling and called parties. Implementers SHOULD consider allowing users to opt out of responding with Connected Identity or restrict participation to enterprise contexts where such correlation is expected.
-
-The response_uuid MUST only be disclosed to the authenticated parties authorized to retrieve the original publish. Servers SHOULD keep the response_uuid lifetime short and MUST NOT expose it via unauthenticated endpoints or logs.
-
-## Compliance with Regional Privacy Regulations
-
-Operators deploying VESPER OOB MUST assess their processing of PASSporTs and related metadata for compliance with applicable data protection laws (e.g., GDPR, CCPA). This includes evaluating:
-
-- Whether telephone numbers are treated as personal data
-- Lawful basis for processing and retention
-- User transparency and rights of access, rectification, and erasure
-
-Audit mechanisms and data subject request workflows SHOULD be implemented when operating in regulated jurisdictions.
-
-## Transparency and Logging
-
-While logging of CPS activity is important for fraud detection and accountability, implementations MUST avoid logging full PASSporT payloads or tokens unless strictly necessary. Where logs include sensitive fields, they SHOULD be protected with access controls and subject to audit.
-
-The use of transaction-specific UUIDs instead of callback URLs minimizes the privacy exposure associated with publishing service endpoints. Only parties with the appropriate authorization token (Access JWT) can retrieve or respond to a PASSporT exchange, which helps ensure that identity data is not leaked to unauthorized entities. Connected Identity responses are associated only with the UUID provided to the intended recipient, reducing correlation risk across sessions.
-
-
 # Security Considerations
 
-## Trust Anchors and Certificate Transparency
+All PASSporTs and Access JWTs MUST be signed using delegate certificates issued under the certificate policy defined in {{RFC8226}} and containing valid SCTs as defined in {{I-D.ietf-stir-certificate-transparency}}. Verifiers MUST validate the certificate trust chain and SHOULD verify SCT inclusion against known CT log sets. Access JWTs MUST use the ES256 algorithm, MUST be scoped per transaction with short validity intervals (e.g., 5 minutes), and MUST include a `jti` claim for replay prevention. CPS implementations MUST cache recent `jti` values and reject reuse within the validity window. The `response_uuid` MUST only be disclosed to authenticated parties authorized to retrieve the original publish and MUST NOT be exposed via unauthenticated endpoints or logs. UUIDs used as transaction identifiers MUST be generated using cryptographically random techniques to prevent enumeration.
 
-All JWTs and PASSporTs MUST be signed using delegate certificates anchored in a trusted STI-CA root and SHOULD be accompanied by Signed Certificate Timestamps (SCTs) to prove log inclusion. Verifiers SHOULD validate SCT presence and match against a known CT log set.
-
-## Cross-Origin and CORS
-
-CPS servers that expose web-facing endpoints MAY implement CORS headers to restrict origin access to approved domains or application scopes.
-
-## Logging and Audit
-
-CPS operators SHOULD log authentication attempts, JWT usage (by jti), PASSporT publication, and response_url usage for auditing and potential fraud investigation. Logs SHOULD be retained securely and in accordance with privacy regulations.
-
-## UUID-Based Transaction Integrity
-
-The specification relies on cryptographically random UUIDs as transaction identifiers for Connected Identity responses. These UUIDs MUST be generated by the CPS using secure random generation techniques and MUST be unguessable to prevent targeted scraping or brute-force enumeration of published PASSporTs or responses.
-
-## Replay and Reuse Mitigation
-
-The use of the 'jti' (JWT ID) field in Access JWTs supports replay protection and auditability. CPS implementations SHOULD maintain short-term caches of recent JTIs and reject duplicate requests. JWTs MUST have short time-to-live values (e.g., 5 minutes) to reduce exposure from replay attacks.
-
-## CPS Operator Responsibilities
-
-CPS operators MUST enforce authorization controls and rate limiting across all endpoints. They are responsible for securing logs, ensuring endpoint availability, monitoring for anomalies, and maintaining certificate trust anchors. Any retained identity data MUST be stored securely and retained only as long as operationally necessary.
-
+CPS operators MUST enforce rate limiting across all endpoints and MUST retain identity data only as long as operationally necessary.
 
 # IANA Considerations
 
@@ -1030,4 +979,4 @@ This document has no IANA actions.
 # Acknowledgments
 {:numbered="false"}
 
-The authors thank the contributors of the STIR working group and authors of ATIS-1000105, many of the API mechanisms have been aligned and extended in this document to support the Vesper OOB Framework for PASSporT delivery signed with delegate certificates.
+The authors thank the contributors of the STIR working group and authors of ATIS-1000105, many of the API mechanisms have been aligned and extended in this document to support the VESPER OOB Framework for PASSporT delivery signed with delegate certificates.
