@@ -149,7 +149,7 @@ These optional endpoints are used if a `response_uuid` was included in the publi
 - GET /passports/response/stream/{UUID} - Server-Sent Events (SSE) push interface (optional)
 - wss://.../stream/respond/{UUID} - WebSocket push delivery (optional)
 
-All endpoints MUST be served over HTTPS. The POST endpoint MUST require authentication Access JWT. The GET endpoint MAY be unauthenticated. CPS operators SHOULD additionally enforce rate-limits and access-control policies.
+All endpoints MUST be served over HTTPS. All endpoints that expose PASSporTs, Connected Identity UUIDs, or response PASSporTs MUST require authentication via Access JWT as defined in {{common-access-jwt}}. The GET /health endpoint does not require authentication. CPS operators SHOULD additionally enforce rate-limits and access-control policies.
 
 Server certificates SHOULD be validated using standard PKIX procedures. HTTP Strict Transport Security (HSTS) MAY be used by CPS operators to enforce HTTPS usage.
 
@@ -184,11 +184,11 @@ The Access JWT payload MUST contain the following claims:
 | 'action'      | Operation intent: "publish", "retrieve", or "respond".           |
 | 'aud'         | The CPS hostname (e.g., "cps.example.net"). MUST match the target server. |
 | 'iss'         | The SPC or TN representing the signer. MUST match TNAuthList in cert. |
-| 'sub'         | Same value as `iss`. Identifies the subscriber authorized to act. |
+| 'sub'         | The SPC or TN identifying the subscriber on whose behalf the action is performed. In most deployments this is identical to `iss`. In delegated signing scenarios where a platform signs on behalf of a subscriber, `iss` identifies the signing entity and `sub` identifies the subscriber whose telephone number authority is being exercised. Both MUST appear in the certificate's TNAuthList. |
 | 'orig'        | Object with TN/URI of the originating party.    |
 | 'dest'        | Object with TN/URI of the destination party.    |
-| 'passports'   | OPTIONAL. For 'publish', SHA-256 JCS digest of the canonicalized `passports`.  |
-| 'rsp_passport'| OPTIONAL. For 'respond', SHA-256 JCS digest of the `rsp_passport`. |
+| 'passports'   | OPTIONAL. For 'publish', the base64url-encoded SHA-256 hash of the JCS {{RFC8785}} canonicalization of the complete JSON request body object (i.e., the object containing the `passports` array).  |
+| 'rsp_passport'| OPTIONAL. For 'respond', the base64url-encoded SHA-256 hash of the JCS {{RFC8785}} canonicalization of the complete JSON request body object (i.e., the object containing the `rsp_passport` field). |
 {: title="Access JWT Claims"}
 
 #### Examples
@@ -215,6 +215,7 @@ Retrieve Token (Verifying Called Party):
 ~~~ json
 {
   "iat": 1693590100,
+  "exp": 1693590400,
   "jti": "550e8400-e29b-41d4-a716-426655440002",
   "action": "retrieve",
   "aud": "cps.example.net",
@@ -230,6 +231,7 @@ Respond Token (Called Party responding with Connected Identity):
 ~~~ json
 {
   "iat": 1693590050,
+  "exp": 1693590400,
   "jti": "550e8400-e29b-41d4-a716-426655440001",
   "action": "respond",
   "aud": "cps.example.net",
@@ -250,7 +252,7 @@ The CPS MUST validate the Access JWT as follows:
 - Time Validity: 'iat' MUST be recent (within an allowed freshness window, e.g., 5 minutes).
 - Audience: 'aud' MUST match the target CPS domain.
 - Claims Match: The 'orig' and 'dest' claims MUST match the HTTP path parameters.
-- Digest Integrity: If the 'passports' or 'rsp_passport' claim is present, its hash MUST match the canonicalized JSON in the request body using JSON Canonicalization Scheme (JCS) {{RFC8785}}.
+- Digest Integrity: If the 'passports' or 'rsp_passport' claim is present, its value MUST equal the base64url-encoded SHA-256 hash computed over the JCS {{RFC8785}} canonicalization of the complete JSON request body. Both parties MUST canonicalize the full request body object before hashing. The encoding of the hash value MUST use base64url without padding as defined in RFC 4648 Section 5.
 
 ### Additional Security
 
@@ -289,7 +291,7 @@ This method allows the calling party to publish one or more signed PASSporTs ass
 
 PASSporTs and Connected Identity response PASSporTs SHOULD be retained only for a short period of time unless longer retention is explicitly required by policy.
 
-Note: {{ATIS-1000105}} supports a "re-publish" action, because the VESPER-OOB discovery mechanism is different and re-publishing PASSporTs is not required for VESPER-OOB, CPSs that support this specification are not dependent on support the initiation of this action or otherwise communicate to other CPSs supporting this specification including the inclusion of "token" fields, but the intent is to be compatible with implementations that support both specifications
+Note: {{ATIS-1000105}} defines a "re-publish" action for forwarding PASSporTs between CPSs. Because VESPER OOB uses a transparent discovery model based on STI-CT log monitoring rather than bilateral CPS-to-CPS communication, re-publishing is not required. CPS implementations conforming to this specification are not required to support the re-publish action or the associated "token" fields defined in {{ATIS-1000105}}. However, this specification is designed to be compatible with deployments that support both VESPER OOB and {{ATIS-1000105}}.
 
 #### Request Definition
 
@@ -315,11 +317,13 @@ ORIG: Canonicalized and percent-encoded originating telephone number or URI.
 
 Canonicalization of TNs follows {{RFC8224}} and percent encoding of URIs follows {{RFC3986}}.
 
+Note: The path ordering places {DEST} before {ORIG} to align with the lookup pattern used by the called party, which typically knows its own number (DEST) and resolves PASSporTs based on the calling party (ORIG). The CPS MUST validate that the `orig` and `dest` claims in the Access JWT match the {ORIG} and {DEST} path parameters respectively; a mismatch MUST result in a 403 Forbidden response.
+
 #### Request Body
 
 The request body is a JSON object with the following field:
 
-- passports: REQUIRED. An array of PASSporT strings signed by the calling party.
+- passports: REQUIRED. An array of one or more PASSporT strings signed by the calling party. Multiple PASSporTs MAY be included when the authentication service issues PASSporTs with different `ppt` types (e.g., a base `shaken` PASSporT alongside a `div` or `rcd` PASSporT) for the same call. All PASSporTs in the array MUST share the same `orig`, `dest`, and `iat` values and MUST be signed by the same delegate certificate.
 
 Authorization JWT Requirements:
 
@@ -449,6 +453,8 @@ Authorization: Bearer <Access JWT>
 
 Canonicalization of TNs follows {{RFC8224}} and percent encoding of URIs follows {{RFC3986}}.
 
+Note: The path ordering places {DEST} before {ORIG} to align with the lookup pattern used by the called party, which typically knows its own number (DEST) and resolves PASSporTs based on the calling party (ORIG). The CPS MUST validate that the `orig` and `dest` claims in the Access JWT match the {ORIG} and {DEST} path parameters respectively; a mismatch MUST result in a 403 Forbidden response.
+
 #### Authorization JWT Requirements
 
 The JWT used to authorize this request MUST include:
@@ -456,6 +462,10 @@ The JWT used to authorize this request MUST include:
 - "action": "retrieve"
 
 All other JWT validation requirements are defined in {{common-access-jwt}} and MUST also be enforced by the CPS.
+
+#### Prerequisite Check
+
+Before accepting a Connected Identity response, the CPS SHOULD verify that the PASSporT associated with the given `response_uuid` was previously retrieved by a party whose `iss` claim matches the `dest` TN of the original transaction. This ensures that the responding party has had the opportunity to validate the originating PASSporT before asserting its own identity. If the CPS enforces this check and no prior retrieval has occurred, it SHOULD return 409 Conflict with a descriptive error indicating that retrieval must precede response submission.
 
 #### Response Definition
 
@@ -756,14 +766,33 @@ Content-Type: application/json
 
 ### Retrieve Response Push Methods (Optional)
 
-The CPS MAY support real-time delivery via:
+The CPS MAY support real-time delivery of Connected Identity responses via push interfaces as an alternative to polling.
 
-WebSocket: wss://cps.example.net/stream/respond/{UUID}
+#### Server-Sent Events (SSE)
 
-Server-Sent Events (SSE): GET /passports/response/stream/{UUID}
-(with Accept: text/event-stream header)
+~~~
+GET /passports/response/stream/{UUID}
+Accept: text/event-stream
+Authorization: Bearer <Access JWT>
+~~~
 
-These interfaces allow immediate delivery of Connected Identity responses when available.
+The SSE endpoint uses the same Access JWT authentication as the polling GET endpoint. The JWT MUST include `"action": "retrieve"` and the `iss` claim MUST match the originating party of the transaction. The CPS MUST validate the JWT before initiating the event stream.
+
+#### WebSocket
+
+~~~
+wss://cps.example.net/stream/respond/{UUID}
+~~~
+
+Because the WebSocket upgrade request does not support the Authorization header in all client implementations, the Access JWT MUST be conveyed using one of the following mechanisms, listed in order of preference:
+
+1. The `Sec-WebSocket-Protocol` subprotocol negotiation, using the format `access_token.<JWT>`.
+2. A query parameter `?token=<JWT>` on the connection URI. When this method is used, CPS operators MUST ensure the token is not logged in access logs.
+3. An initial text frame sent immediately after connection establishment, containing the Access JWT. The CPS MUST NOT transmit any response data until the JWT has been received and validated.
+
+The CPS MUST close the WebSocket connection with status code 1008 (Policy Violation) if the JWT is missing, invalid, or unauthorized.
+
+Both push interfaces MUST enforce the same authorization constraints as the polling GET endpoint: only the authenticated originating party of the transaction (as identified by `iss`) is permitted to receive the response.
 
 # Example VESPER OOB Request/Response Flow
 
@@ -917,6 +946,7 @@ Verification Services that retrieve and validate PASSporTs via the VESPER OOB mo
 
 - CPS URI Resolution: Determine the CPS URI for the given TN or SPC by consulting TN-to-CPS mappings derived from monitoring STI-CT logs for delegate certificates containing the CPS URI extension, as described in the CPS URI and OOB CPS Discovery section of this document.
 - PASSporT Retrieval: Submit a 'GET' request to the CPS endpoint using a properly formed JWT in the Authorization header.
+- Multiple PASSporT Handling: If the retrieved response contains multiple PASSporTs, the verifier MUST validate each PASSporT independently. All PASSporTs MUST share the same `orig`, `dest`, and `iat` values and MUST be signed by the same delegate certificate. If any PASSporT fails validation, the verifier SHOULD reject the entire set and SHOULD log the failure for diagnostic purposes. The verifier MAY apply local policy to determine which PASSporT types are actionable.
 - Authentication JWT Validation: Ensure the JWT is:
   - Signed by a valid STI certificate that chains to a trusted root.
   - Contains matching 'iss' and 'sub' values as authorized in the certificate's TNAuthList.
@@ -966,7 +996,7 @@ If these validations succeed, the verifier can confirm that the called party has
 
 # Security Considerations
 
-All PASSporTs and Access JWTs MUST be signed using delegate certificates issued under the certificate policy defined in {{RFC8226}} and containing valid SCTs as defined in {{I-D.ietf-stir-certificate-transparency}}. Verifiers MUST validate the certificate trust chain and SHOULD verify SCT inclusion against known CT log sets. Access JWTs MUST use the ES256 algorithm, MUST be scoped per transaction with short validity intervals (e.g., 5 minutes), and MUST include a `jti` claim for replay prevention. CPS implementations MUST cache recent `jti` values and reject reuse within the validity window. The `response_uuid` MUST only be disclosed to authenticated parties authorized to retrieve the original publish and MUST NOT be exposed via unauthenticated endpoints or logs. UUIDs used as transaction identifiers MUST be generated using cryptographically random techniques to prevent enumeration.
+All PASSporTs and Access JWTs MUST be signed using delegate certificates issued under the certificate policy defined in {{RFC8226}} and containing valid SCTs as defined in {{I-D.ietf-stir-certificate-transparency}}. Verifiers MUST validate the certificate trust chain and SHOULD verify SCT inclusion against known CT log sets. Access JWTs MUST use the ES256 algorithm, MUST be scoped per transaction with short validity intervals (e.g., 5 minutes), and MUST include a `jti` claim for replay prevention. CPS implementations MUST cache recent `jti` values and reject reuse within the validity window. The `response_uuid` MUST only be disclosed to authenticated parties authorized to retrieve the original publish and MUST NOT be exposed via unauthenticated endpoints or logs. CPS implementations MUST restrict access to the `response_uuid` and its associated response endpoint to the authenticated parties of the original transaction. Specifically, the CPS MUST verify that a party requesting the Connected Identity response PASSporT (via GET /passports/response/{UUID} or push interfaces) is the same entity that performed the original publish, as identified by the `iss` claim in their Access JWT. The CPS MUST NOT disclose whether a `response_uuid` exists or has a pending response to any other party. CPS implementations SHOULD return 404 (rather than 403) for unauthorized UUID lookups to prevent UUID existence confirmation.
 
 CPS operators MUST enforce rate limiting across all endpoints and MUST retain identity data only as long as operationally necessary.
 
