@@ -38,6 +38,7 @@ author:
 
 normative:
   RFC3261:
+  RFC3986:
   RFC8224:
   RFC8225:
   RFC8226:
@@ -87,7 +88,7 @@ Authority Token: A signed assertion that authorizes the issuance of a delegate c
 
 PASSporT Placement Service (PPS): The service that stores signed PASSporTs published by an originating party and serves them to an authorized retrieving party, and that supports the optional Connected Identity response exchange. Earlier STIR out-of-band work, notably {{RFC8816}}, refers to this role as a Call Placement Service (CPS). This document uses PASSporT Placement Service for two reasons. First, the CPS acronym collides with Certification Practice Statement (CPS) as used in {{RFC8226}} and certificate policy practice generally, which is a recurring source of ambiguity in a document that deals with both certificates and this service. Second, the service places and serves PASSporTs and is not limited to telephone calls; the same mechanism is intended to apply to applications beyond telephone calls, for which a PASSporT-centric name is more accurate.
 
-PPS URI: A URI identifying a PASSporT Placement Service (PPS), carried in the pps-uris attribute (type 1) of the TN Attributes extension {{I-D.wendt-stir-cert-tn-attr-ext}}. The PPS URI identifies the PASSporT Placement Service (PPS) for the telephone numbers covered by the certificate.
+PPS URI: A URI {{RFC3986}} identifying a PASSporT Placement Service (PPS), carried in the pps-uris attribute (type 1) of the TN Attributes extension {{I-D.wendt-stir-cert-tn-attr-ext}}. The PPS URI identifies the PASSporT Placement Service (PPS) for the telephone numbers covered by the certificate.
 
 PPS Discovery: The process of identifying the PPS endpoint responsible for a given telephone number by monitoring STI-CT logs for delegate certificates carrying a PPS URI attribute as defined in {{I-D.wendt-stir-cert-tn-attr-ext}}.
 
